@@ -11,7 +11,7 @@ scores = defaultdict(lambda: 0)
 def pretty_format_scores() -> str:
     formatted_string = "```\n"
     entries = scores.items()
-    entries = sorted(entries, key=lambda entry: entry[1], reverse=True)
+    entries = sorted(entries, key=itemgetter(1), reverse=True)
     for user, score in entries:
         score_entry = f"{score:3} | {user.display_name} \n"
         formatted_string += score_entry
