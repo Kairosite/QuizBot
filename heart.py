@@ -3,6 +3,7 @@
 import discord
 from collections import defaultdict
 from config import config
+from operator import itemgetter
 
 client = discord.Client()
 scores = defaultdict(lambda: 0)
