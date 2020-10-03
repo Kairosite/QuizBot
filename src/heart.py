@@ -5,7 +5,7 @@ from discord.ext import commands
 from config import config
 from score import Scores
 
-QuizBot = commands.Bot(command_prefix=commands.when_mentioned)
+QuizBot = commands.Bot(command_prefix=commands.when_mentioned_or("!"))
 
 
 @QuizBot.command(name="Oi!")

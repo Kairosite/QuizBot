@@ -16,7 +16,7 @@ class Scores(commands.Cog):
         name="update",
         aliases=["upt"]
     )
-    def update_score(self, ctx, *, score: int):
+    async def update_score(self, ctx, score: int):
         self.scores[ctx.author] += score
         return
 
@@ -24,7 +24,7 @@ class Scores(commands.Cog):
         name="get",
         aliases=["g"]
     )
-    def get_score(self, ctx):
+    async def get_score(self, ctx):
         await ctx.send(self.pretty_format_scores())
         return
 
@@ -32,7 +32,7 @@ class Scores(commands.Cog):
         name="reset",
         aliases=["r"]
     )
-    def reset_score(self, ctx):
+    async def reset_score(self, ctx):
         await ctx.send(self.pretty_format_scores())
         self.scores.clear()
         return
