@@ -14,16 +14,36 @@ class Scores(commands.Cog):
 
     @commands.command(
         name="update",
-        aliases=["upt"]
+        aliases=["upt", "u"]
     )
+    @commands.guild_only()
     async def update_score(self, ctx, score: int):
         self.scores[ctx.author] += score
+        await ctx.send(
+            f"```\n {self.scores[ctx.author]:3}" +
+            f"| {ctx.author.display_name} \n```"
+        )
+        return
+
+    @update_score.error
+    async def update_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send(
+                ctx.author.mention +
+                " you have to actually give a score. Muppet."
+            )
+        elif isinstance(error, commands.UserInputError):
+            await ctx.send(
+                ctx.author.mention +
+                " fucked up, scores must be whole numbers."
+            )
         return
 
     @commands.command(
         name="get",
         aliases=["g"]
     )
+    @commands.guild_only()
     async def get_score(self, ctx):
         await ctx.send(self.pretty_format_scores())
         return
@@ -32,6 +52,7 @@ class Scores(commands.Cog):
         name="reset",
         aliases=["r"]
     )
+    @commands.guild_only()
     async def reset_score(self, ctx):
         await ctx.send(self.pretty_format_scores())
         self.scores.clear()
