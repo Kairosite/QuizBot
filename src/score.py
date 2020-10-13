@@ -4,6 +4,7 @@ from __future__ import print_function
 from discord.ext import commands
 from collections import defaultdict
 from operator import itemgetter
+from responses import get_insult
 
 
 class Scores(commands.Cog):
@@ -21,7 +22,7 @@ class Scores(commands.Cog):
         self.scores[ctx.author] += score
         await ctx.send(
             f"```\n {self.scores[ctx.author]:3}" +
-            f"| {ctx.author.display_name} \n```"
+            f" | {ctx.author.display_name} \n```"
         )
         return
 
@@ -30,12 +31,13 @@ class Scores(commands.Cog):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.send(
                 ctx.author.mention +
-                " you have to actually give a score. Muppet."
+                " you have to actually give a score." +
+                f"{get_insult().capitalize()}."
             )
         elif isinstance(error, commands.UserInputError):
             await ctx.send(
                 ctx.author.mention +
-                " fucked up, scores must be whole numbers."
+                f" is a {get_insult()}, scores must be whole numbers."
             )
         return
 
@@ -45,7 +47,13 @@ class Scores(commands.Cog):
     )
     @commands.guild_only()
     async def get_score(self, ctx):
-        await ctx.send(self.pretty_format_scores())
+        if self.scores:
+            await ctx.send(self.pretty_format_scores())
+        else:
+            await ctx.send(
+                ctx.author.mention +
+                f", there are no scores yet, you {get_insult()}."
+            )
         return
 
     @commands.command(
@@ -54,7 +62,8 @@ class Scores(commands.Cog):
     )
     @commands.guild_only()
     async def reset_score(self, ctx):
-        await ctx.send(self.pretty_format_scores())
+        if self.scores:
+            await ctx.send(self.pretty_format_scores())
         self.scores.clear()
         return
 
