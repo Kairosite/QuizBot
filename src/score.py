@@ -5,6 +5,7 @@ from discord.ext import commands
 from collections import defaultdict
 from operator import itemgetter
 from responses import get_insult
+import discord
 
 
 class Scores(commands.Cog):
@@ -18,11 +19,19 @@ class Scores(commands.Cog):
         aliases=["upt", "u"]
     )
     @commands.guild_only()
-    async def update_score(self, ctx, score: int):
-        self.scores[ctx.author] += score
+    async def update_score(self, ctx, score: int,
+                           member: discord.Member = None):
+        if member:
+            if "games master" not in map(lambda x: x.name, ctx.author.roles):
+                raise commands.MissingRole("games master")
+            target = member
+        else:
+            target = ctx.author
+
+        self.scores[target] += score
         await ctx.send(
-            f"```\n {self.scores[ctx.author]:3}" +
-            f" | {ctx.author.display_name} \n```"
+            f"```\n {self.scores[target]:3}" +
+            f" | {target.display_name} \n```"
         )
         return
 
@@ -34,7 +43,17 @@ class Scores(commands.Cog):
                 " you have to actually give a score." +
                 f"{get_insult().capitalize()}."
             )
-        elif isinstance(error, commands.UserInputError):
+        elif isinstance(error, commands.MissingRole):
+            await ctx.send(
+                ctx.author.mention +
+                " you have no power here."
+            )
+        elif isinstance(error, commands.MemberNotFound):
+            await ctx.send(
+                ctx.author.mention +
+                f" is a {get_insult()}, thats not a user."
+            )
+        elif isinstance(error, commands.BadArgument):
             await ctx.send(
                 ctx.author.mention +
                 f" is a {get_insult()}, scores must be whole numbers."
@@ -61,10 +80,19 @@ class Scores(commands.Cog):
         aliases=["r"]
     )
     @commands.guild_only()
+    @commands.has_role("games master")
     async def reset_score(self, ctx):
         if self.scores:
             await ctx.send(self.pretty_format_scores())
         self.scores.clear()
+        return
+
+    @reset_score.error
+    async def reset_error(self, ctx, error):
+        await ctx.send(
+            ctx.author.mention +
+            " you have no power here."
+        )
         return
 
     def pretty_format_scores(self) -> str:
