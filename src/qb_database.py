@@ -5,7 +5,8 @@ import sqlalchemy as db
 from sqlalchemy.sql import func
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from operator import itemgetter
+from operator import attrgetter
+from collections import namedtuple
 
 engine = db.create_engine("sqlite:////__env__/qb_database.db")
 Base = declarative_base(engine)
@@ -83,6 +84,12 @@ class QuizBotDatabaseException(Exception):
         self.payload = payload
 
 
+PlayerEntry = namedtuple("PlayerEntry", ["score", "captain_id", "modified"])
+TeamEntry = namedtuple("TeamEntry", ["score", "team_name", "modified"])
+TeamScore = namedtuple("TeamScore", ["score", "breakdown"])
+PlayerScore = namedtuple("PlayerScore", ["player_id", "name"])
+
+
 class CachedGame():
     players = dict()
     teams = dict()
@@ -101,14 +108,14 @@ class CachedGame():
             for player_entry in self.session.query(Player).filter(
                 Player.channel_id == self.channel_id
             ).all():
-                self.players[player_entry.user_id] = (
+                self.players[player_entry.user_id] = PlayerEntry(
                     player_entry.score, player_entry.captain_id, False
                 )
             # Load Teams
             for team_entry in self.session.query(Team).filter(
                 Team.channel_id == self.channel_id
             ).all():
-                self.teams[team_entry.captain_id] = (
+                self.teams[team_entry.captain_id] = TeamEntry(
                     team_entry.score, team_entry.team_name, False
                 )
             # Get GM role
@@ -153,58 +160,201 @@ class CachedGame():
                 )
             self.game_state_modified = False
         # Writeback Players
-        for (user_id, (score, captain_id, modified)) in filter(
-                lambda x: x[1][2], self.players):
-            if self.session.query(Player).filter(
+        for (user_id, player_entry) in self.players.items():
+            if player_entry.modified:
+                if self.session.query(Player).filter(
+                            Player.user_id == user_id,
+                            Player.channel_id == self.channel_id
+                        ).one_or_none():
+                    self.session.query(Player).filter(
                         Player.user_id == user_id
-                    ).one_or_none():
+                    ).update(
+                        {"score": player_entry.score,
+                         "captain_id": player_entry.captain_id},
+                        synchronize_session="evaluate"
+                    )
+                else:
+                    self.session.merge(
+                        Player(
+                            user_id,
+                            self.channel_id,
+                            player_entry.score,
+                            player_entry.captain_id
+                        )
+                    )
+            self.players[user_id].modified = False
+        # Delete Removed Players
+        for player in self.players.query(Player.user_id).filter(
+            Player.channel_id == self.channel_id
+        ).all():
+            if player.user_id not in self.players:
                 self.session.query(Player).filter(
-                    Player.user_id == user_id
-                ).update(
-                    {"score": score,
-                     "captain_id": captain_id},
-                    synchronize_session="evaluate"
-                )
-            else:
-                self.session.merge(
-                    Player(user_id, self.channel_id, score, captain_id)
-                )
-            self.players[user_id] = (score, captain_id, False)
+                    Player.user_id == player.user_id,
+                    Player.channel_id == self.channel_id
+                ).delete()
         # Writeback Teams
-        for (captain_id, (score, team_name, modified)) in filter(
-                lambda x: x[1][2], self.teams):
+        for (captain_id, team_entry) in self.teams.item():
             if self.session.query(Team).filter(
-                        Team.captain_id == captain_id
+                        Team.captain_id == captain_id,
+                        Player.channel_id == self.channel_id
                     ).one_or_none():
                 self.session.query(Team).filter(
                     Team.captain_id == captain_id
                 ).update(
-                    {"score": score,
-                     "team_name": team_name},
+                    {"score": team_entry.score,
+                     "team_name": team_entry.team_name},
                     synchronize_session="evaluate"
                 )
             else:
                 self.session.merge(
-                    Team(captain_id, self.channel_id, score, team_name)
+                    Team(
+                        captain_id,
+                        self.channel_id,
+                        team_entry.score,
+                        team_entry.team_name
+                    )
                 )
-            self.playteamsers[captain_id] = (score, team_name, False)
+            self.playteamsers[captain_id].modified = False
+        # Delete Removed Teams
+        for team in self.players.query(Team.captain_id).filter(
+            Team.channel_id == self.channel_id
+        ).all():
+            if team.captain_id not in self.teams:
+                self.session.query(Team).filter(
+                    Team.captain_id == team.captain_id,
+                    Team.channel_id == self.channel_id
+                ).delete()
         self.modified = False
+
+    def get_score(self, player_id):
+        if player_id in self.players:
+            player_entry = self.players[player_id]
+            if player_entry.captain_id:
+                team_score = self.teams[player_entry.captain_id].score
+            else:
+                team_score = None
+            return (player_entry.score, team_score)
+        else:
+            return None
+
+    def set_score(self, player_id, score):
+        if player_id in self.players:
+            player_entry = self.players[player_id]
+            if player_entry.captain_id:
+                diff = score - player_entry.score
+                self.teams[player_entry.captain_id].score += diff
+                team_score = self.teams[player_entry.captain_id].score
+            else:
+                team_score = None
+            player_entry.score = score
+            player_entry.modified = True
+            return (player_entry.score, team_score)
+        else:
+            return None
+
+    def get_player_score(self, player_id):
+        # TODO
+        pass
+
+    def set_player_score(self, player_id, score):
+        # TODO
+        pass
+
+    def get_team_score(self, captain_id):
+        # TODO
+        pass
+
+    def set_team_score(self, captain_id, score):
+        # TODO
+        pass
+
+    def add_score(self, player_id, score):
+        self.set_score(player_id, self.get_score(player_id) + score)
+
+    def add_player_score(self, player_id, score):
+        self.set_player_score(
+            player_id,
+            self.get_player_score(player_id) + score
+        )
+
+    def add_team_score(self, captain_id, score):
+        self.set_team_score(
+            captain_id,
+            self.get_team_score(captain_id) + score
+        )
 
     def get_scores(self):
         teams = {}
         # Get teams
-        for (captain_id, (score, n, m)) in self.teams.items():
-            teams[captain_id] = (score, [])
+        for (captain_id, team_entry) in self.teams.items():
+            teams[captain_id] = TeamScore(team_entry.score, [])
         # Add players
         for (player_id, (score, captain_id)) in self.players.items():
             if captain_id:
-                teams[captain_id][1].append((player_id, score))
+                teams[captain_id].breakdown.append(
+                    PlayerScore(player_id, score)
+                )
             else:
-                teams[player_id] = (score, [(player_id, score)])
+                teams[player_id] = TeamScore(
+                    score,
+                    [PlayerScore(player_id, score)]
+                )
         # Sort scores
-        teams = [(t, s, sorted(p, itemgetter(1), True))
+        teams = [(t, s, sorted(p, attrgetter("score"), True))
                  for (t, (s, p)) in teams.items()]
-        return sorted(teams, itemgetter(1), True)
+        return sorted(teams, attrgetter("score"), True)
+
+    def add_player(self):
+        # TODO
+        pass
+
+    def del_player(self):
+        # TODO
+        pass
+
+    def get_player_team(self):
+        # TODO
+        pass
+
+    def set_player_team(self):
+        # TODO
+        pass
+
+    def new_team(self, captain_id):
+        # TODO
+        pass
+
+    def get_team_name(self, captain_id):
+        return self.teams[captain_id].team_name
+
+    def set_team_name(self, captain_id, team_name):
+        if len(team_name) <= 256:
+            self.teams[captain_id].team_name = team_name
+        else:
+            raise ValueError('team_name too long')
+
+    def get_captain_id(self, team_name):
+        # TODO
+        pass
+
+    def update_team_captain(self, old_captain_id, new_captain_id):
+        # TODO
+        pass
+
+    def get_owner_id(self):
+        return self.owner_id
+
+    def set_owner_id(self, owner_id):
+        self.owner_id = owner_id
+
+    def get_game_name(self):
+        return self.game_name
+
+    def set_game_name(self, game_name):
+        if len(game_name) <= 256:
+            self.game_name = game_name
+        else:
+            raise ValueError('game_name too long')
 
     def __del__(self):
         self._writeback_(True)
