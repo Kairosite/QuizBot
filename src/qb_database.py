@@ -241,9 +241,11 @@ class CachedGame():
         if player_id in self.players:
             player_entry = self.players[player_id]
             if player_entry.captain_id:
+                team_entry = self.teams[player_entry.captain_id]
                 diff = score - player_entry.score
-                self.teams[player_entry.captain_id].score += diff
-                team_score = self.teams[player_entry.captain_id].score
+                team_entry.score += diff
+                team_entry.modified = True
+                team_score = team_entry.score
             else:
                 team_score = None
             player_entry.score = score
@@ -253,20 +255,34 @@ class CachedGame():
             return None
 
     def get_player_score(self, player_id):
-        # TODO
-        pass
+        if player_id in self.players:
+            return self.players[player_id].score
+        else:
+            return None
 
     def set_player_score(self, player_id, score):
-        # TODO
-        pass
+        if player_id in self.players:
+            player_entry = self.players[player_id]
+            player_entry.score = score
+            player_entry.modified = True
+            return player_entry.score
+        else:
+            return None
 
     def get_team_score(self, captain_id):
-        # TODO
-        pass
+        if captain_id in self.teams:
+            return self.teams[captain_id].score
+        else:
+            return None
 
     def set_team_score(self, captain_id, score):
-        # TODO
-        pass
+        if captain_id in self.teams:
+            team_entry = self.teams[captain_id]
+            team_entry.score = score
+            team_entry.modified = True
+            return team_entry.score
+        else:
+            return None
 
     def add_score(self, player_id, score):
         self.set_score(player_id, self.get_score(player_id) + score)
@@ -304,25 +320,51 @@ class CachedGame():
                  for (t, (s, p)) in teams.items()]
         return sorted(teams, attrgetter("score"), True)
 
-    def add_player(self):
-        # TODO
-        pass
+    def add_player(self, player_id):
+        if player_id not in self.players:
+            self.players[player_id] = PlayerEntry(0, None, True)
+            return player_id
+        else:
+            return None
 
-    def del_player(self):
-        # TODO
-        pass
+    def del_player(self, player_id):
+        if player_id in self.teams:
+            self.del_team(player_id)
+        try:
+            del self.players[player_id]
+            return player_id
+        except KeyError:
+            return None
 
-    def get_player_team(self):
-        # TODO
-        pass
+    def get_player_team(self, player_id):
+        if player_id in self.players:
+            return self.players[player_id].captain_id
+        else:
+            return None
 
-    def set_player_team(self):
-        # TODO
-        pass
+    def set_player_team(self, player_id, captain_id):
+        if player_id in self.players and captain_id in self.teams:
+            self.players[player_id].captain_id = captain_id
+            return player_id
+        else:
+            return None
 
-    def new_team(self, captain_id):
-        # TODO
-        pass
+    def add_team(self, captain_id):
+        if captain_id in self.players and captain_id not in self.teams:
+            self.players[captain_id].captain_id = captain_id
+            self.teams[captain_id] = TeamEntry(0, None, True)
+        else:
+            return None
+
+    def del_team(self, captain_id):
+        if captain_id in self.teams:
+            del self.team[captain_id]
+            for player in self.players:
+                if player.captain_id == captain_id:
+                    player.captain_id = None
+            return captain_id
+        else: 
+            return None
 
     def get_team_name(self, captain_id):
         return self.teams[captain_id].team_name
@@ -334,12 +376,25 @@ class CachedGame():
             raise ValueError('team_name too long')
 
     def get_captain_id(self, team_name):
-        # TODO
-        pass
+        for captain_id, team_entry in self.teams.items():
+            if team_entry.team_name == team_name:
+                return captain_id
+        return None
 
     def update_team_captain(self, old_captain_id, new_captain_id):
-        # TODO
-        pass
+        if old_captain_id in self.teams \
+                and new_captain_id not in self.teams \
+                and new_captain_id in self.players \
+                and self.players[new_captain_id].captain_id == old_captain_id:
+            self.team[new_captain_id] = self.teams[old_captain_id]
+            del self.team[old_captain_id]
+            for player in self.players:
+                if player.captain_id == old_captain_id:
+                    player.captain_id = new_captain_id
+            self.team[new_captain_id].modified = True
+            return new_captain_id
+        else:
+            return None
 
     def get_owner_id(self):
         return self.owner_id
