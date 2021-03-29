@@ -320,6 +320,15 @@ class CachedGame():
                  for (t, (s, p)) in teams.items()]
         return sorted(teams, attrgetter("score"), True)
 
+    def get_players(self):
+        return players.keys()
+
+    def get_captains(self):
+        return teams.keys()
+    
+    def get_team_names(self):
+        return map(attrgetter("team_name"), teams.values())
+
     def add_player(self, player_id):
         if player_id not in self.players:
             self.players[player_id] = PlayerEntry(0, None, True)
@@ -381,6 +390,10 @@ class CachedGame():
                 return captain_id
         return None
 
+    def get_team_player_ids(self, captain_id):
+        # TODO
+        pass
+
     def update_team_captain(self, old_captain_id, new_captain_id):
         if old_captain_id in self.teams \
                 and new_captain_id not in self.teams \
@@ -410,6 +423,9 @@ class CachedGame():
             self.game_name = game_name
         else:
             raise ValueError('game_name too long')
+
+    def __contains__(self, player_id):
+        return player_id in self.players
 
     def __del__(self):
         self._writeback_(True)
